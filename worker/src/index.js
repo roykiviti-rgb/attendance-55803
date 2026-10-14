@@ -79,12 +79,15 @@ export default {
       return json({ ok: false, error: "unknown_name" }, 400, cors);
     }
 
-    // 3+4. כתיבה אטומית: used/{id} + attendance/{id}, שתיהן עם exists=false.
-    // אם הקוד כבר נוצל — ה-commit כולו נכשל ושום דבר לא נכתב.
+    // 3+4. כתיבה אטומית: used/{id} + attendance/{id} + registered/{lec+שם}, כולן עם exists=false.
+    // אם הקוד כבר נוצל או שהסטודנט כבר נרשם להרצאה — ה-commit כולו נכשל ושום דבר לא נכתב.
     try {
       const result = await recordAttendance(env, { id, lec, name });
       if (result === "used") {
         return json({ ok: false, error: "used" }, 409, cors);
+      }
+      if (result === "already_registered") {
+        return json({ ok: false, error: "already_registered", name }, 409, cors);
       }
       return json({ ok: true, name, lec }, 200, cors);
     } catch (err) {
@@ -153,11 +156,18 @@ async function isUsed(env, id) {
   throw new Error(`get failed: ${res.status} ${await res.text()}`);
 }
 
+// מזהה מסמך לזוג (הרצאה, סטודנט) — מבטיח רישום אחד לכל סטודנט בכל הרצאה
+async function registrationId(lec, name) {
+  const digest = await crypto.subtle.digest("SHA-256", enc.encode(`${lec}|${name}`));
+  return b64urlEncode(new Uint8Array(digest));
+}
+
 async function recordAttendance(env, { id, lec, name }) {
   const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
   const token = await getAccessToken(sa);
   const base = `projects/${sa.project_id}/databases/(default)/documents`;
   const now = new Date().toISOString();
+  const regId = await registrationId(lec, name);
 
   const res = await fetch(
     `https://firestore.googleapis.com/v1/${base}:commit`,
@@ -191,6 +201,17 @@ async function recordAttendance(env, { id, lec, name }) {
             },
             currentDocument: { exists: false },
           },
+          {
+            update: {
+              name: `${base}/registered/${regId}`,
+              fields: {
+                lec: { stringValue: lec },
+                name: { stringValue: name },
+                id: { stringValue: id },
+              },
+            },
+            currentDocument: { exists: false },
+          },
         ],
       }),
     },
@@ -200,8 +221,11 @@ async function recordAttendance(env, { id, lec, name }) {
 
   const err = await res.json().catch(() => ({}));
   const status = err?.error?.status;
-  // precondition exists=false נכשל → המסמך כבר קיים → הקוד נוצל
-  if (status === "ALREADY_EXISTS" || status === "FAILED_PRECONDITION") return "used";
+  // precondition exists=false נכשל → אחד המסמכים כבר קיים.
+  // Firestore לא אומר איזה, אז בודקים: אם הקוד נוצל → "used", אחרת הסטודנט כבר רשום.
+  if (status === "ALREADY_EXISTS" || status === "FAILED_PRECONDITION") {
+    return (await isUsed(env, id)) ? "used" : "already_registered";
+  }
   throw new Error(`commit failed: ${res.status} ${JSON.stringify(err)}`);
 }
 
