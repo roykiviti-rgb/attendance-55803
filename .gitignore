@@ -1,0 +1,26 @@
+# מפתח ה-HMAC הסודי — לעולם לא ל-GitHub
+secret.key
+*.key
+
+# מפתח ה-service account של Firebase
+service-account*.json
+*-firebase-adminsdk-*.json
+firebase-key*.json
+
+# רשימת הסטודנטים — נארזת לתוך ה-Worker בזמן הפריסה, לא ציבורית
+students.json
+
+# קבצי PDF עם קודים תקפים
+out/
+*.pdf
+
+# Cloudflare / Node
+worker/.wrangler/
+worker/.dev.vars
+node_modules/
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc

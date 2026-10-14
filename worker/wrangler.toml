@@ -1,0 +1,11 @@
+name = "attendance-55803"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# כתובת אתר ה-GitHub Pages (origin בלבד, בלי נתיב). אפשר כמה, מופרדים בפסיק.
+ALLOWED_ORIGIN = "https://roykiviti-rgb.github.io"
+
+# הסודות לא נכתבים כאן! הגדר אותם עם:
+#   npx wrangler secret put HMAC_SECRET
+#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT
