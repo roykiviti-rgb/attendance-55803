@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>יסודות המימון — רישום נוכחות</title>
+  <title>Fundamentals of Finance — Attendance</title>
   <style>
     :root {
       --bg: #f5f6f8;
@@ -126,8 +126,8 @@
 </head>
 <body>
 <main>
-  <h1>יסודות המימון — רישום נוכחות</h1>
-  <p class="sub" id="lecInfo">קורס 55803 · האוניברסיטה העברית</p>
+  <h1>Fundamentals of Finance — Attendance</h1>
+  <p class="sub" id="lecInfo">Course 55803 · The Hebrew University of Jerusalem</p>
 
   <div id="result" class="msg" hidden role="status" aria-live="polite">
     <div class="icon" id="resultIcon"></div>
@@ -135,28 +135,28 @@
     <p id="resultText"></p>
   </div>
 
-  <p class="sub" id="loading">טוען…</p>
+  <p class="sub" id="loading">Loading…</p>
 
   <form id="form" class="card" hidden>
-    <label class="lbl" for="search">בחרו את שמכם</label>
-    <input type="search" id="search" placeholder="חיפוש שם…" autocomplete="off">
-    <ul class="names" id="names" role="radiogroup" aria-label="רשימת סטודנטים"></ul>
-    <p class="chosen" id="chosen">לא נבחר שם</p>
-    <button type="submit" class="submit" id="submit" disabled>רשום נוכחות</button>
+    <label class="lbl" for="search">Select your name</label>
+    <input type="search" id="search" placeholder="Search name…" autocomplete="off">
+    <ul class="names" id="names" role="radiogroup" aria-label="Student list"></ul>
+    <p class="chosen" id="chosen">No name selected</p>
+    <button type="submit" class="submit" id="submit" disabled>Mark attendance</button>
   </form>
 </main>
 
 <script>
-  // כתובת ה-Cloudflare Worker (לא סוד — המפתח הסודי נמצא רק ב-Worker)
+  // Cloudflare Worker URL (not a secret — the signing key lives only in the Worker)
   const WORKER_URL = "https://attendance-55803.roykiviti.workers.dev";
 
   const ERRORS = {
-    invalid: ["קוד לא תקין", "הקוד שנסרק אינו תקין. סרקו שוב את הקוד מהדף."],
-    expired: ["פג תוקף", "תוקף הקוד הסתיים. פנו למרצה."],
-    used: ["קוד כבר שומש", "הקוד הזה כבר נוצל לרישום נוכחות. כל דף תקף לרישום אחד בלבד."],
-    unknown_name: ["שם לא ברשימה", "השם שנבחר לא נמצא ברשימת הסטודנטים."],
-    network: ["אין חיבור", "לא הצלחנו להתחבר לשרת. בדקו את החיבור לאינטרנט ונסו שוב."],
-    server: ["שגיאת שרת", "משהו השתבש. נסו שוב בעוד רגע."],
+    invalid: ["Invalid code", "This code is not valid. Please scan the QR code on your slip again."],
+    expired: ["Code expired", "This code has expired. Please speak to the lecturer."],
+    used: ["Code already used", "This code has already been used. Each slip is valid for one registration only."],
+    unknown_name: ["Name not on the list", "The selected name is not on the student list."],
+    network: ["No connection", "Could not reach the server. Check your internet connection and try again."],
+    server: ["Server error", "Something went wrong. Please try again in a moment."],
   };
 
   const $ = (id) => document.getElementById(id);
@@ -187,23 +187,23 @@
 
   function showSuccess(name) {
     $("form").hidden = true;
-    showResult("ok", "הנוכחות נרשמה", name + " — תודה!");
+    showResult("ok", "Attendance recorded", name + " — thank you!");
   }
 
   function lectureLabel(lec) {
     const m = /^(\d+)-(\d{4})-(\d{2})-(\d{2})$/.exec(lec);
-    return m ? `הרצאה ${m[4]}.${m[3]}.${m[2]}` : "";
+    return m ? `Lecture ${m[4]}.${m[3]}.${m[2]}` : "";
   }
 
   function renderNames() {
-    const q = $("search").value.trim().normalize("NFC");
+    const q = $("search").value.trim().normalize("NFC").toLowerCase();
     const list = $("names");
     list.textContent = "";
-    const shown = names.filter((n) => n.includes(q));
+    const shown = names.filter((n) => n.toLowerCase().includes(q));
     if (!shown.length) {
       const li = document.createElement("li");
       li.className = "empty";
-      li.textContent = "לא נמצאו שמות";
+      li.textContent = "No matching names";
       list.appendChild(li);
       return;
     }
@@ -217,7 +217,7 @@
       b.addEventListener("click", () => {
         selected = n;
         $("chosen").innerHTML = "";
-        $("chosen").append("נבחר/ה: ");
+        $("chosen").append("Selected: ");
         const s = document.createElement("strong");
         s.textContent = n;
         $("chosen").append(s);
@@ -233,7 +233,7 @@
     e.preventDefault();
     if (!selected) return;
     $("submit").disabled = true;
-    $("submit").textContent = "שולח…";
+    $("submit").textContent = "Sending…";
     $("result").hidden = true;
     try {
       const res = await fetch(WORKER_URL, {
@@ -256,15 +256,15 @@
       showError("network");
     }
     $("submit").disabled = false;
-    $("submit").textContent = "רשום נוכחות";
+    $("submit").textContent = "Mark attendance";
   }
 
   async function init() {
     const label = lectureLabel(code.lec);
-    if (label) $("lecInfo").textContent = label + " · קורס 55803";
+    if (label) $("lecInfo").textContent = label + " · Course 55803";
 
     if (!code.id || !code.lec || !code.exp || !code.sig) {
-      showResult("err", "קוד לא תקין", "יש לסרוק את קוד ה-QR מהדף שקיבלתם בכיתה.");
+      showResult("err", "Invalid code", "Please scan the QR code on the slip you received in class.");
       return;
     }
 
@@ -272,7 +272,7 @@
     try { done = localStorage.getItem(doneKey); } catch {}
     if (done) { showSuccess(done); return; }
 
-    // רשימת השמות מגיעה מה-Worker, ורק עבור קוד תקף שעוד לא נוצל
+    // The name list comes from the Worker, and only for a valid, unused code
     try {
       const res = await fetch(WORKER_URL + "/names", {
         method: "POST",
@@ -284,7 +284,7 @@
         showError(data.error);
         return;
       }
-      const collator = new Intl.Collator("he");
+      const collator = new Intl.Collator("en", { sensitivity: "base" });
       names = data.names.map((n) => n.normalize("NFC").trim()).sort(collator.compare);
     } catch {
       showError("network");

@@ -10,7 +10,7 @@
 שליד הסקריפט. אם אף אחד מהם לא קיים — נוצר secret.key חדש (פעם אחת בלבד).
 secret.key נמצא ב-.gitignore ואסור שיגיע ל-GitHub.
 
-תלויות:  pip install qrcode reportlab python-bidi
+תלויות:  pip install qrcode reportlab
 """
 
 import argparse
@@ -28,18 +28,12 @@ from urllib.parse import urlencode
 import qrcode
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
-
-try:
-    from bidi import get_display  # python-bidi >= 0.5
-except ImportError:
-    from bidi.algorithm import get_display
 
 # ---------- הגדרות ----------
 
-COURSE_NAME = "יסודות המימון"
+COURSE_NAME = "Fundamentals of Finance"
 COURSE_NUMBER = "55803"
 
 # כתובת אתר ה-GitHub Pages (עם / בסוף). אפשר לדרוס עם --base-url.
@@ -49,12 +43,9 @@ HERE = Path(__file__).resolve().parent
 SECRET_FILE = HERE / "secret.key"
 OUT_DIR = HERE / "out"
 
-FONT_CANDIDATES = [
-    ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
-    ("/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
-    ("/Library/Fonts/Arial Unicode.ttf", None),
-    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-]
+# הטקסט ב-PDF באנגלית, אז מספיקים הגופנים המובנים של PDF
+FONT = "Helvetica"
+FONT_BOLD = "Helvetica-Bold"
 
 
 # ---------- מפתח וחתימה ----------
@@ -109,21 +100,13 @@ def make_codes(secret, base_url, lec, exp, count):
 
 # ---------- PDF ----------
 
-def register_fonts(font_path=None):
-    candidates = [(font_path, None)] if font_path else FONT_CANDIDATES
-    for regular, bold in candidates:
-        if regular and Path(regular).exists():
-            pdfmetrics.registerFont(TTFont("He", regular))
-            if bold and Path(bold).exists():
-                pdfmetrics.registerFont(TTFont("He-Bold", bold))
-                return "He", "He-Bold"
-            return "He", "He"
-    sys.exit("לא נמצא גופן שתומך בעברית. העבר נתיב לקובץ TTF עם --font.")
-
-
-def heb(text: str) -> str:
-    """reportlab לא תומך ב-RTL — הופכים את סדר התווים לתצוגה."""
-    return get_display(text)
+def draw_fitted(c, cx, y, text, font, size, max_width):
+    """כותב טקסט ממורכז, ומקטין את הגופן אם הוא רחב מדי לתא."""
+    width = stringWidth(text, font, size)
+    if width > max_width:
+        size *= max_width / width
+    c.setFont(font, size)
+    c.drawCentredString(cx, y, text)
 
 
 def draw_qr(c, url, x, y, size):
@@ -150,8 +133,7 @@ def draw_qr(c, url, x, y, size):
     c.drawPath(path, stroke=0, fill=1)
 
 
-def build_pdf(path, codes, lec, lecture_date, exp_ts, cols, rows, fonts):
-    font, font_bold = fonts
+def build_pdf(path, codes, lec, lecture_date, exp_ts, cols, rows):
     page_w, page_h = A4
     margin = 8 * mm
     cell_w = (page_w - 2 * margin) / cols
@@ -166,8 +148,9 @@ def build_pdf(path, codes, lec, lecture_date, exp_ts, cols, rows, fonts):
     pad = 6 * mm * scale  # שוליים לבנים סביב ה-QR (quiet zone)
 
     qr_size = min(cell_w - 2 * pad, cell_h - text_block - 3 * pad)
-    exp_str = dt.datetime.fromtimestamp(exp_ts).strftime("%d.%m.%Y %H:%M")
-    date_str = lecture_date.strftime("%d.%m.%Y")
+    exp_str = dt.datetime.fromtimestamp(exp_ts).strftime("%d %b %Y, %H:%M")
+    date_str = lecture_date.strftime("%d %b %Y")
+    text_w = cell_w - 2 * pad
 
     c = canvas.Canvas(str(path), pagesize=A4)
     c.setTitle(f"{COURSE_NAME} — {lec}")
@@ -176,8 +159,8 @@ def build_pdf(path, codes, lec, lecture_date, exp_ts, cols, rows, fonts):
         page_codes = codes[page_start:page_start + per_page]
 
         for i, url in enumerate(page_codes):
-            # סדר מימין לשמאל, מלמעלה למטה
-            col = cols - 1 - (i % cols)
+            # סדר משמאל לימין, מלמעלה למטה
+            col = i % cols
             row = i // cols
             x0 = margin + col * cell_w
             y0 = page_h - margin - (row + 1) * cell_h
@@ -188,17 +171,15 @@ def build_pdf(path, codes, lec, lecture_date, exp_ts, cols, rows, fonts):
             draw_qr(c, url, qr_x, qr_y, qr_size)
 
             ty = qr_y - pad - fs_title
-            c.setFont(font_bold, fs_title)
-            c.drawCentredString(cx, ty, heb(f"{COURSE_NAME} · {COURSE_NUMBER}"))
-            c.setFont(font, fs_small)
+            draw_fitted(c, cx, ty, f"{COURSE_NAME} · {COURSE_NUMBER}", FONT_BOLD, fs_title, text_w)
             ty -= line * 1.15
-            c.drawCentredString(cx, ty, heb(f"הרצאה {date_str}  ·  {lec}"))
+            draw_fitted(c, cx, ty, f"Lecture {date_str}  ·  {lec}", FONT, fs_small, text_w)
             ty -= line
-            c.drawCentredString(cx, ty, heb(f"בתוקף עד {exp_str}"))
+            draw_fitted(c, cx, ty, f"Valid until {exp_str}", FONT, fs_small, text_w)
             ty -= line
             c.setFillColorRGB(0.35, 0.35, 0.35)
-            c.drawCentredString(cx, ty, heb("סרקו, בחרו את שמכם ולחצו \"רשום נוכחות\""))
-            c.setFont(font, fs_small * 0.8)
+            draw_fitted(c, cx, ty, 'Scan, select your name, tap "Mark attendance"', FONT, fs_small, text_w)
+            c.setFont(FONT, fs_small * 0.8)
             c.drawString(x0 + 2 * mm, y0 + 2 * mm, f"#{page_start + i + 1}")
             c.setFillColorRGB(0, 0, 0)
 
@@ -241,7 +222,6 @@ def main():
     p.add_argument("--layout", type=parse_layout, default=(3, 3),
                    help="קודים לעמוד: COLSxROWS (ברירת מחדל: 3x3; 1x1 = קוד אחד לעמוד)")
     p.add_argument("--base-url", default=BASE_URL, help="כתובת אתר ה-GitHub Pages")
-    p.add_argument("--font", help="נתיב לקובץ TTF שתומך בעברית")
     p.add_argument("-o", "--output", help="נתיב קובץ ה-PDF")
     p.add_argument("--init-secret", action="store_true",
                    help="רק ליצור את secret.key (אם לא קיים) ולצאת")
@@ -273,7 +253,7 @@ def main():
     out = Path(args.output) if args.output else OUT_DIR / f"attendance-{lec}.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
     cols, rows = args.layout
-    build_pdf(out, codes, lec, lecture_date, exp_ts, cols, rows, register_fonts(args.font))
+    build_pdf(out, codes, lec, lecture_date, exp_ts, cols, rows)
 
     print(f"נוצרו {len(codes)} קודים להרצאה {lec}")
     print(f"בתוקף עד {dt.datetime.fromtimestamp(exp_ts):%d.%m.%Y %H:%M}")

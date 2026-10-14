@@ -20,6 +20,8 @@
 
 `students.json` **לא** עולה ל-GitHub (הוא ב-`.gitignore`) ולא נמצא באתר הציבורי. הרשימה נמצאת רק בתוך ה-Worker, והוא מחזיר אותה רק למי ששולח קוד תקף: חתום, בתוקף ועוד לא נוצל. מי שנכנס לאתר בלי קוד, או עם קוד שכבר שומש, לא רואה אף שם. בפועל רק מי שקיבל דף בכיתה רואה את הרשימה.
 
+**שפה:** האתר וה-PDF באנגלית, כי חלק מהסטודנטים לא קוראים עברית. השמות ב-`students.json` כתובים באנגלית, כפי שהם מופיעים בייצוא המשתתפים מ-Moodle ("First name" + "Last name", סטודנטים בלבד).
+
 **שינוי ברשימה** (סטודנט הצטרף או עזב): ערכו את `students.json` והריצו שוב `npx wrangler deploy` מתוך התיקייה `worker`. בלי פריסה מחדש, השינוי לא ייכנס לתוקף.
 | Firestore | Firebase | אחסון בלבד: `used` (קודים שנוצלו) ו-`attendance` (רישומים) |
 
@@ -39,7 +41,7 @@
 
 ### דרישות מוקדמות
 
-- Python 3.9 ומעלה, ואז: `pip install qrcode reportlab python-bidi`
+- Python 3.9 ומעלה, ואז: `pip install qrcode reportlab`
 - Node.js 18 ומעלה (בשביל `npx wrangler`)
 - חשבונות: GitHub, Cloudflare (חינמי), Google/Firebase (תוכנית Spark החינמית מספיקה)
 
