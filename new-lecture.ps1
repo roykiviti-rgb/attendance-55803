@@ -106,3 +106,7 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path $pdf)) {
 }
 
 Start-Process $pdf
+
+if ($output -match "אזהרה") {
+    Show-Message "הקודים נוצרו ויעבדו כרגיל, אבל ההפקה לא דווחה לדשבורד (אולי אין חיבור לאינטרנט).`n`nאפשר להפיק שוב כשיש חיבור." "Warning"
+}

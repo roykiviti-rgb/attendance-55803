@@ -24,3 +24,6 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+
+# סיסמת הכניסה לדשבורד
+admin-password.txt

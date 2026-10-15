@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>דשבורד נוכחות</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --series: #2a78d6;
+    --series-wash: rgba(42, 120, 214, 0.10);
+    --good: #0ca30c;
+    --good-text: #006300;
+    --warning: #fab219;
+    --warning-text: #8a5a00;
+    --critical: #d03b3b;
+    --flash: rgba(42, 120, 214, 0.16);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --series: #3987e5;
+      --series-wash: rgba(57, 135, 229, 0.14);
+      --good: #0ca30c;
+      --good-text: #0ca30c;
+      --warning: #fab219;
+      --warning-text: #fab219;
+      --critical: #e66767;
+      --flash: rgba(57, 135, 229, 0.22);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 1.3rem; margin: 0; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .sub { color: var(--ink-2); }
+  [hidden] { display: none !important; }
+  button, select, input { font: inherit; color: inherit; }
+  button {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--axis); }
+  button.primary { background: var(--series); color: #fff; border-color: transparent; font-weight: 600; }
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  section + section { margin-top: 16px; }
+
+  /* כניסה */
+  #login { max-width: 360px; margin: 12vh auto 0; }
+  #login input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--page);
+    margin: 10px 0 12px;
+  }
+  #login .err { color: var(--critical); min-height: 1.5em; margin: 0 0 8px; }
+
+  /* כותרת */
+  header.top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    margin-bottom: 16px;
+  }
+  header.top .title { flex: 1 1 260px; }
+  header.top .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--ink-2); }
+  .live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+  .live.on .dot { animation: pulse 2s ease-in-out infinite; }
+  .live.off .dot { background: var(--muted); }
+  .live.err .dot { background: var(--critical); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .live.on .dot { animation: none; } }
+
+  /* השיעור הנבחר */
+  .lec-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .lec-head h2 { margin: 0; }
+  .hero { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 28px; margin-bottom: 16px; }
+  .hero .big { font-size: 3.2rem; font-weight: 700; line-height: 1; }
+  .hero .big small { font-size: 1.4rem; font-weight: 500; color: var(--ink-2); }
+  .hero .pct { font-size: 1rem; color: var(--ink-2); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .tile .k { font-size: .85rem; color: var(--ink-2); }
+  .tile .v { font-size: 1.35rem; font-weight: 600; }
+  .status { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; }
+  .status.good { color: var(--good-text); }
+  .status.over { color: var(--muted); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+  .cols h3 { font-size: .95rem; margin: 0 0 8px; }
+  ul.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; max-height: 340px; overflow-y: auto; }
+  ul.list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; }
+  ul.list li + li { border-top: 1px solid var(--border); }
+  ul.list li .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  ul.list li.empty { color: var(--muted); justify-content: center; }
+  ul.list li.new { animation: flash 3s ease-out; }
+  @keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+
+  /* גרף */
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { display: block; width: 100%; height: 240px; overflow: visible; }
+  .chart-wrap .bar { fill: var(--series); }
+  .chart-wrap .bar.sel { fill: var(--series); }
+  .chart-wrap .slot { fill: transparent; cursor: pointer; }
+  .chart-wrap .slot:hover, .chart-wrap .slot.sel { fill: var(--series-wash); }
+  .chart-wrap .grid { stroke: var(--grid); stroke-width: 1; }
+  .chart-wrap .base { stroke: var(--axis); stroke-width: 1; }
+  .chart-wrap text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart-wrap text.val { fill: var(--ink-2); font-size: 11px; font-weight: 600; }
+  .tip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: .85rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+    white-space: nowrap;
+    transform: translate(-50%, -100%);
+  }
+  details.table-view { margin-top: 10px; }
+  details.table-view summary { cursor: pointer; color: var(--ink-2); font-size: .9rem; }
+
+  /* טבלת סטודנטים */
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { padding: 7px 10px; text-align: start; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--ink-2); font-weight: 600; font-size: .85rem; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--ink); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .meter { display: inline-block; width: 80px; height: 6px; border-radius: 3px; background: var(--grid); vertical-align: middle; margin-inline-start: 8px; overflow: hidden; }
+  .meter span { display: block; height: 100%; background: var(--series); border-radius: 3px; }
+  .flag { color: var(--warning-text); font-weight: 600; font-size: .85rem; }
+  .dots { display: inline-flex; gap: 3px; direction: ltr; }
+  .dots i { width: 10px; height: 10px; border-radius: 2px; background: var(--grid); display: inline-block; }
+  .dots i.y { background: var(--series); }
+  .empty-state { text-align: center; padding: 40px 16px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+
+  <form id="login" class="card" hidden>
+    <h1>דשבורד נוכחות</h1>
+    <p class="sub">יסודות המימון · 55803</p>
+    <label for="pw">סיסמה</label>
+    <input id="pw" type="password" autocomplete="current-password" required>
+    <p class="err" id="loginErr"></p>
+    <button class="primary" type="submit">כניסה</button>
+  </form>
+
+  <div id="app" hidden>
+    <header class="top">
+      <div class="title">
+        <h1>דשבורד נוכחות — יסודות המימון (55803)</h1>
+        <span class="live off" id="live"><span class="dot"></span><span id="liveText">מתחבר…</span></span>
+      </div>
+      <div class="actions">
+        <button type="button" id="btnRefresh" title="טעינה מחדש של כל הנתונים">רענון מלא</button>
+        <button type="button" id="btnCsv">ייצוא לאקסל (CSV)</button>
+        <button type="button" id="btnLogout">יציאה</button>
+      </div>
+    </header>
+
+    <div id="emptyState" class="card empty-state" hidden>
+      עוד לא הופקו קודים.<br>אחרי ההפקה הראשונה ההרצאה תופיע כאן, והרישומים יתעדכנו בזמן אמת.
+    </div>
+
+    <div id="content" hidden>
+      <section class="card" id="lecSection">
+        <div class="lec-head">
+          <h2 id="lecTitle">השיעור האחרון</h2>
+          <label class="sub">הרצאה:
+            <select id="lecSelect"></select>
+          </label>
+        </div>
+        <div class="hero">
+          <div>
+            <div class="big" id="heroCount">0 <small>/ 0</small></div>
+            <div class="pct" id="heroPct">נוכחים</div>
+          </div>
+        </div>
+        <div class="tiles">
+          <div class="tile"><div class="k">קודים שהופקו</div><div class="v" id="tGen">—</div></div>
+          <div class="tile"><div class="k">קודים שנוצלו</div><div class="v" id="tUsed">—</div></div>
+          <div class="tile"><div class="k">קודים שלא נוצלו</div><div class="v" id="tLeft">—</div></div>
+          <div class="tile"><div class="k">תוקף הקודים</div><div class="v" id="tExp">—</div></div>
+        </div>
+        <div class="cols">
+          <div>
+            <h3 id="regTitle">נרשמו</h3>
+            <ul class="list" id="regList"></ul>
+          </div>
+          <div>
+            <h3 id="missTitle">לא נרשמו</h3>
+            <ul class="list" id="missList"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>נוכחות לפי הרצאה</h2>
+        <div class="chart-wrap" id="chartWrap" dir="ltr">
+          <svg id="chart" role="img" aria-label="מספר הנוכחים בכל הרצאה"></svg>
+          <div class="tip" id="tip" hidden></div>
+        </div>
+        <details class="table-view">
+          <summary>הצגה כטבלה</summary>
+          <div class="table-scroll"><table id="lecTable"></table></div>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>נוכחות לפי סטודנט</h2>
+        <p class="sub" id="studentsNote"></p>
+        <div class="table-scroll"><table id="stuTable"></table></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+  const POLL_MS = 5000;            // עדכון חי כל 5 שניות
+  const FULL_REFRESH_MS = 600000;  // טעינה מלאה כל 10 דקות (תופס גם מחיקות שנעשו ב-Firebase)
+  const OVERLAP_MS = 60000;        // חפיפה בין משיכות, כדי לא לפספס רישום שנכתב ברגע המשיכה
+  const LOW_ATTENDANCE = 0.8;      // סף לסימון נוכחות נמוכה
+  const TOKEN_KEY = "attendance-admin-token";
+  const TZ = "Asia/Jerusalem";
+
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    token: null,
+    students: [],
+    attendance: new Map(),   // id -> {id, lec, name, timestamp}
+    lectures: new Map(),     // lec -> {lec, codesGenerated, lastGeneratedAt, expiresAt}
+    since: null,
+    selected: null,          // lec שנבחר ידנית; null = השיעור האחרון
+    seen: new Set(),         // רישומים שכבר הוצגו (לסימון רישומים חדשים)
+    firstLoad: true,
+    lastOk: 0,
+    sort: { key: "name", dir: 1 },
+    timer: null,
+    lastFull: 0,
+  };
+
+  // ---------- עזרים ----------
+  const fmtTime = (iso) => new Date(iso).toLocaleTimeString("he-IL", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  const fmtDateTime = (iso) => new Date(iso).toLocaleString("he-IL", { timeZone: TZ, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const lecDate = (lec) => { const m = /(\d{4})-(\d{2})-(\d{2})$/.exec(lec || ""); return m ? `${m[3]}.${m[2]}.${m[1]}` : lec; };
+  const lecShort = (lec) => { const m = /(\d{4})-(\d{2})-(\d{2})$/.exec(lec || ""); return m ? `${m[3]}.${m[2]}` : lec; };
+  const todayIso = () => new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+  const lecIsoDate = (lec) => (/(\d{4}-\d{2}-\d{2})$/.exec(lec || "") || [])[1] || "";
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  function el(tag, attrs = {}, text) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function svgEl(tag, attrs = {}) {
+    const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  }
+  const storage = {
+    get() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
+    set(v) { try { localStorage.setItem(TOKEN_KEY, v); } catch {} },
+    clear() { try { localStorage.removeItem(TOKEN_KEY); } catch {} },
+  };
+
+  // ---------- נתונים ----------
+  async function fetchData(full) {
+    const url = new URL("/admin/data", location.origin);
+    if (!full && state.since) url.searchParams.set("since", state.since);
+    const res = await fetch(url, { headers: { Authorization: "Bearer " + state.token }, cache: "no-store" });
+    if (res.status === 401) throw Object.assign(new Error("unauthorized"), { auth: true });
+    if (!res.ok) throw new Error("http " + res.status);
+    return res.json();
+  }
+
+  function merge(data) {
+    if (data.full) { state.attendance.clear(); state.lectures.clear(); }
+    state.students = data.students || state.students;
+    for (const a of data.attendance) state.attendance.set(a.id, a);
+    for (const l of data.lectures) state.lectures.set(l.lec, l);
+    state.since = new Date(new Date(data.serverTime).getTime() - OVERLAP_MS).toISOString();
+  }
+
+  // כל ההרצאות: מהדיווחים על הפקה וגם מהרישומים עצמם
+  function allLectures() {
+    const lecs = new Map();
+    for (const l of state.lectures.values()) lecs.set(l.lec, { ...l, present: new Map() });
+    for (const a of state.attendance.values()) {
+      if (!lecs.has(a.lec)) lecs.set(a.lec, { lec: a.lec, codesGenerated: null, lastGeneratedAt: null, expiresAt: null, present: new Map() });
+      const p = lecs.get(a.lec).present;
+      if (!p.has(a.name) || a.timestamp < p.get(a.name).timestamp) p.set(a.name, a);
+    }
+    return [...lecs.values()].sort((x, y) => lecIsoDate(x.lec).localeCompare(lecIsoDate(y.lec)));
+  }
+
+  // "השיעור האחרון" = זה שהקודים שלו הופקו אחרונים; אם אין דיווח הפקה — התאריך המאוחר ביותר
+  function latestLecture(lecs) {
+    const generated = lecs.filter((l) => l.lastGeneratedAt);
+    if (generated.length) return generated.reduce((a, b) => (a.lastGeneratedAt > b.lastGeneratedAt ? a : b));
+    return lecs[lecs.length - 1];
+  }
+
+  // ---------- תצוגה ----------
+  function render() {
+    const lecs = allLectures();
+    $("emptyState").hidden = lecs.length > 0;
+    $("content").hidden = lecs.length === 0;
+    if (!lecs.length) return;
+
+    const latest = latestLecture(lecs);
+    const current = lecs.find((l) => l.lec === state.selected) || latest;
+    renderSelect(lecs, latest, current);
+    renderLecture(current, current === latest);
+    renderChart(lecs, current);
+    renderLecTable(lecs);
+    renderStudents(lecs);
+    state.firstLoad = false;
+  }
+
+  function renderSelect(lecs, latest, current) {
+    const sel = $("lecSelect");
+    sel.textContent = "";
+    for (const l of [...lecs].reverse()) {
+      const o = el("option", { value: l.lec }, lecDate(l.lec) + (l === latest ? " (אחרון)" : ""));
+      if (l === current) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+
+  function renderLecture(l, isLatest) {
+    const total = state.students.length;
+    const n = l.present.size;
+    $("lecTitle").textContent = (isLatest ? "השיעור האחרון · " : "הרצאה · ") + lecDate(l.lec);
+    $("heroCount").textContent = n + " ";
+    $("heroCount").appendChild(el("small", {}, "/ " + total));
+    $("heroPct").textContent = `נוכחים · ${pct(n, total)}%`;
+
+    const used = [...state.attendance.values()].filter((a) => a.lec === l.lec).length;
+    $("tGen").textContent = l.codesGenerated != null ? l.codesGenerated : "—";
+    $("tUsed").textContent = used;
+    $("tLeft").textContent = l.codesGenerated != null ? Math.max(0, l.codesGenerated - used) : "—";
+
+    const tExp = $("tExp");
+    tExp.textContent = "";
+    if (l.expiresAt) {
+      const live = new Date(l.expiresAt) > new Date();
+      const s = el("span", { class: "status " + (live ? "good" : "over") });
+      s.append(el("span", { "aria-hidden": "true" }, live ? "●" : "○"), live ? "בתוקף עד " + fmtDateTime(l.expiresAt) : "פג תוקף");
+      tExp.appendChild(s);
+      tExp.style.fontSize = "1rem";
+    } else {
+      tExp.textContent = "—";
+    }
+
+    // נרשמו — החדשים למעלה
+    const reg = [...l.present.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    $("regTitle").textContent = `נרשמו (${reg.length})`;
+    const regList = $("regList");
+    regList.textContent = "";
+    if (!reg.length) regList.appendChild(el("li", { class: "empty" }, "עוד אין רישומים"));
+    for (const a of reg) {
+      const li = el("li");
+      li.append(el("span", {}, a.name), el("span", { class: "t" }, fmtTime(a.timestamp)));
+      if (!state.firstLoad && !state.seen.has(a.id)) li.classList.add("new");
+      regList.appendChild(li);
+    }
+    for (const a of state.attendance.values()) state.seen.add(a.id);
+
+    const missing = state.students.filter((s) => !l.present.has(s));
+    $("missTitle").textContent = `לא נרשמו (${missing.length})`;
+    const missList = $("missList");
+    missList.textContent = "";
+    if (!missing.length) missList.appendChild(el("li", { class: "empty" }, "כולם נרשמו"));
+    for (const s of missing) missList.appendChild(el("li", {}, s));
+  }
+
+  function renderChart(lecs, current) {
+    const svg = $("chart");
+    const wrap = $("chartWrap");
+    const W = Math.max(300, wrap.clientWidth);
+    const H = 240, top = 22, bottom = 26, left = 30, right = 8;
+    const total = Math.max(1, state.students.length);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.textContent = "";
+    const plotH = H - top - bottom;
+    const y = (v) => top + plotH - (v / total) * plotH;
+
+    // קווי רשת: 0, חצי, מלא
+    for (const v of [0, Math.round(total / 2), total]) {
+      svg.appendChild(svgEl("line", { x1: left, x2: W - right, y1: y(v), y2: y(v), class: v === 0 ? "base" : "grid" }));
+      const t = svgEl("text", { x: left - 6, y: y(v) + 4, "text-anchor": "end" });
+      t.textContent = v;
+      svg.appendChild(t);
+    }
+
+    const slot = (W - left - right) / lecs.length;
+    const bw = Math.min(24, slot * 0.6);
+    const labelEvery = Math.ceil(lecs.length / Math.max(1, Math.floor((W - left) / 46)));
+    lecs.forEach((l, i) => {
+      const n = l.present.size;
+      const cx = left + slot * i + slot / 2;
+      const hit = svgEl("rect", { x: cx - slot / 2, y: top, width: slot, height: plotH, class: "slot" + (l === current ? " sel" : "") });
+      svg.appendChild(hit);
+      if (n > 0) {
+        const h = y(0) - y(n), r = Math.min(4, h);
+        const x0 = cx - bw / 2, x1 = cx + bw / 2, yb = y(0), yt = y(n);
+        // מלבן עם פינות עגולות רק למעלה
+        const d = `M${x0},${yb} V${yt + r} Q${x0},${yt} ${x0 + r},${yt} H${x1 - r} Q${x1},${yt} ${x1},${yt + r} V${yb} Z`;
+        svg.appendChild(svgEl("path", { d, class: "bar" }));
+      }
+      const v = svgEl("text", { x: cx, y: y(n) - 6, "text-anchor": "middle", class: "val" });
+      v.textContent = n;
+      svg.appendChild(v);
+      if (i % labelEvery === 0 || i === lecs.length - 1) {
+        const t = svgEl("text", { x: cx, y: H - 8, "text-anchor": "middle" });
+        t.textContent = lecShort(l.lec);
+        svg.appendChild(t);
+      }
+      const tip = $("tip");
+      hit.addEventListener("mousemove", () => {
+        tip.textContent = `${lecDate(l.lec)} · ${n}/${state.students.length} נוכחים (${pct(n, state.students.length)}%)`;
+        tip.hidden = false;
+        tip.style.left = (cx / W) * wrap.clientWidth + "px";
+        tip.style.top = (y(n) / H) * 240 - 10 + "px";
+      });
+      hit.addEventListener("mouseleave", () => { tip.hidden = true; });
+      hit.addEventListener("click", () => { state.selected = l.lec; render(); $("lecSection").scrollIntoView({ behavior: "smooth" }); });
+    });
+  }
+
+  function renderLecTable(lecs) {
+    const t = $("lecTable");
+    t.textContent = "";
+    const hr = el("tr");
+    ["הרצאה", "נוכחים", "אחוז", "קודים שהופקו"].forEach((h) => hr.appendChild(el("th", {}, h)));
+    t.appendChild(hr);
+    for (const l of [...lecs].reverse()) {
+      const tr = el("tr");
+      tr.append(
+        el("td", {}, lecDate(l.lec)),
+        el("td", { class: "num" }, `${l.present.size}/${state.students.length}`),
+        el("td", { class: "num" }, pct(l.present.size, state.students.length) + "%"),
+        el("td", { class: "num" }, l.codesGenerated ?? "—"),
+      );
+      t.appendChild(tr);
+    }
+  }
+
+  // ההרצאות שנספרות לאחוזי הנוכחות: עד היום (הרצאה עתידית עוד לא "הוחמצה")
+  function countedLectures(lecs) {
+    const today = todayIso();
+    return lecs.filter((l) => lecIsoDate(l.lec) <= today);
+  }
+
+  function studentRows(lecs) {
+    const counted = countedLectures(lecs);
+    return state.students.map((name) => {
+      const marks = counted.map((l) => l.present.has(name));
+      const n = marks.filter(Boolean).length;
+      return { name, n, total: counted.length, ratio: counted.length ? n / counted.length : 0, marks };
+    });
+  }
+
+  function renderStudents(lecs) {
+    const counted = countedLectures(lecs);
+    $("studentsNote").textContent = counted.length
+      ? `מחושב על ${counted.length} הרצאות עד היום. מסומנים סטודנטים מתחת ל-${Math.round(LOW_ATTENDANCE * 100)}%.`
+      : "עוד אין הרצאות שהתקיימו.";
+    const rows = studentRows(lecs);
+    const { key, dir } = state.sort;
+    const collator = new Intl.Collator("en", { sensitivity: "base" });
+    rows.sort((a, b) => (key === "name" ? collator.compare(a.name, b.name) : a.ratio - b.ratio || collator.compare(a.name, b.name)) * dir);
+
+    const t = $("stuTable");
+    t.textContent = "";
+    const hr = el("tr");
+    const arrow = (k) => (state.sort.key === k ? (state.sort.dir === 1 ? " ▲" : " ▼") : "");
+    const thName = el("th", { class: "sortable" }, "שם" + arrow("name"));
+    const thPct = el("th", { class: "sortable" }, "נוכחות" + arrow("ratio"));
+    thName.addEventListener("click", () => setSort("name"));
+    thPct.addEventListener("click", () => setSort("ratio"));
+    hr.append(thName, thPct, el("th", {}, ""), el("th", {}, "לפי הרצאה (הישנה ביותר משמאל)"));
+    t.appendChild(hr);
+
+    for (const r of rows) {
+      const tr = el("tr");
+      tr.appendChild(el("td", { dir: "ltr", style: "text-align:right" }, r.name));
+      const tdP = el("td", { class: "num" }, `${r.n}/${r.total} · ${pct(r.n, r.total)}%`);
+      const meter = el("span", { class: "meter" });
+      const fill = el("span");
+      fill.style.width = pct(r.n, r.total) + "%";
+      meter.appendChild(fill);
+      tdP.appendChild(meter);
+      tr.appendChild(tdP);
+      const tdF = el("td");
+      if (r.total && r.ratio < LOW_ATTENDANCE) tdF.appendChild(el("span", { class: "flag" }, "⚠ נוכחות נמוכה"));
+      tr.appendChild(tdF);
+      const tdD = el("td");
+      const dots = el("span", { class: "dots" });
+      r.marks.forEach((m, i) => dots.appendChild(el("i", { class: m ? "y" : "", title: `${lecDate(counted[i].lec)}: ${m ? "נכח" : "לא נכח"}` })));
+      tdD.appendChild(dots);
+      tr.appendChild(tdD);
+      t.appendChild(tr);
+    }
+  }
+
+  function setSort(key) {
+    state.sort = { key, dir: state.sort.key === key ? -state.sort.dir : 1 };
+    render();
+  }
+
+  function setLive(kind, text) {
+    $("live").className = "live " + kind;
+    $("liveText").textContent = text;
+  }
+
+  function tickLive() {
+    if (!state.lastOk) return;
+    const s = Math.round((Date.now() - state.lastOk) / 1000);
+    if (document.visibilityState !== "visible") setLive("off", "מושהה (הלשונית לא פעילה)");
+    else if (s > 30) setLive("err", "אין חיבור לשרת — מנסה שוב…");
+    else setLive("on", `חי · עודכן לפני ${s} שנ׳`);
+  }
+
+  // ---------- עדכון חי ----------
+  async function poll(full = false) {
+    try {
+      const needFull = full || !state.since || Date.now() - state.lastFull > FULL_REFRESH_MS;
+      const data = await fetchData(needFull);
+      if (needFull) state.lastFull = Date.now();
+      merge(data);
+      state.lastOk = Date.now();
+      render();
+      tickLive();
+    } catch (e) {
+      if (e.auth) { logout("הסיסמה כבר לא תקפה. היכנסו שוב."); return; }
+      setLive("err", "אין חיבור לשרת — מנסה שוב…");
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    state.timer = setInterval(() => { if (document.visibilityState === "visible") poll(); tickLive(); }, POLL_MS);
+  }
+  function stopPolling() { if (state.timer) clearInterval(state.timer); state.timer = null; }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.token) poll();
+    tickLive();
+  });
+  window.addEventListener("resize", () => { if (state.token && state.students.length) render(); });
+
+  // ---------- כניסה / יציאה ----------
+  async function login(token, remember) {
+    state.token = token;
+    try {
+      const data = await fetchData(true);
+      state.lastFull = Date.now();
+      merge(data);
+    } catch (e) {
+      state.token = null;
+      return e.auth ? "סיסמה שגויה" : "אין חיבור לשרת. נסו שוב.";
+    }
+    if (remember) storage.set(token);
+    $("login").hidden = true;
+    $("app").hidden = false;
+    state.lastOk = Date.now();
+    render();
+    tickLive();
+    startPolling();
+    return null;
+  }
+
+  function logout(msg) {
+    stopPolling();
+    storage.clear();
+    Object.assign(state, { token: null, since: null, selected: null, firstLoad: true, lastOk: 0 });
+    state.attendance.clear(); state.lectures.clear(); state.seen.clear();
+    $("app").hidden = true;
+    $("login").hidden = false;
+    $("loginErr").textContent = msg || "";
+    $("pw").value = "";
+    $("pw").focus();
+  }
+
+  $("login").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("loginErr").textContent = "";
+    const err = await login($("pw").value.trim(), true);
+    if (err) $("loginErr").textContent = err;
+  });
+  $("btnLogout").addEventListener("click", () => logout());
+  $("btnRefresh").addEventListener("click", () => { state.seen.clear(); state.firstLoad = true; poll(true); });
+  $("lecSelect").addEventListener("change", (e) => { state.selected = e.target.value; render(); });
+
+  // ---------- ייצוא CSV ----------
+  $("btnCsv").addEventListener("click", () => {
+    const lecs = allLectures();
+    const counted = countedLectures(lecs);
+    const rows = studentRows(lecs).sort((a, b) => a.name.localeCompare(b.name));
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const lines = [["Student", ...counted.map((l) => lecIsoDate(l.lec)), "Attended", "Lectures", "Percent"].map(esc).join(",")];
+    for (const r of rows) lines.push([r.name, ...r.marks.map((m) => (m ? 1 : 0)), r.n, r.total, pct(r.n, r.total)].map(esc).join(","));
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = el("a", { href: URL.createObjectURL(blob), download: `attendance-55803-${todayIso()}.csv` });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  // ---------- התחלה ----------
+  (async () => {
+    const saved = storage.get();
+    if (saved && !(await login(saved, false))) return;
+    if (saved) storage.clear();
+    $("login").hidden = false;
+    $("pw").focus();
+  })();
+</script>
+</body>
+</html>

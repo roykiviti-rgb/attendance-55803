@@ -18,11 +18,14 @@ import base64
 import datetime as dt
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import sys
 import time
 from pathlib import Path
+import urllib.error
+import urllib.request
 from urllib.parse import urlencode
 
 import qrcode
@@ -38,6 +41,9 @@ COURSE_NUMBER = "55803"
 
 # כתובת אתר ה-GitHub Pages (עם / בסוף). אפשר לדרוס עם --base-url.
 BASE_URL = "https://roykiviti-rgb.github.io/attendance-55803/"
+
+# כתובת ה-Cloudflare Worker — לדיווח על ההפקה לדשבורד
+WORKER_URL = "https://attendance-55803.roykiviti.workers.dev"
 
 HERE = Path(__file__).resolve().parent
 SECRET_FILE = HERE / "secret.key"
@@ -96,6 +102,27 @@ def make_codes(secret, base_url, lec, exp, count):
         params = {"id": code_id, "lec": lec, "exp": exp, "sig": sign(secret, code_id, lec, exp)}
         codes.append(f"{base_url}?{urlencode(params)}")
     return codes
+
+
+def report_lecture(secret, lec, count, exp):
+    """מדווח לשרת כמה קודים הופקו, כדי שיופיעו בדשבורד. כישלון לא עוצר את ההפקה."""
+    batch = new_id(set())
+    ts = str(int(time.time()))
+    msg = f"lecture|{lec}|{count}|{exp}|{batch}|{ts}".encode("utf-8")
+    sig = b64url(hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest())
+    body = json.dumps({"lec": lec, "count": count, "exp": exp, "batch": batch, "ts": ts, "sig": sig}).encode()
+    req = urllib.request.Request(
+        WORKER_URL + "/lectures", data=body, method="POST",
+        # Cloudflare חוסם את ה-User-Agent של Python כברירת מחדל
+        headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (attendance-generate)"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read()).get("ok", False)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"אזהרה: הקודים נוצרו, אבל הדיווח לדשבורד נכשל ({e}). הקודים עצמם יעבדו כרגיל.",
+              file=sys.stderr)
+        return False
 
 
 # ---------- PDF ----------
@@ -258,6 +285,8 @@ def main():
     print(f"נוצרו {len(codes)} קודים להרצאה {lec}")
     print(f"בתוקף עד {dt.datetime.fromtimestamp(exp_ts):%d.%m.%Y %H:%M}")
     print(f"PDF: {out}")
+    if report_lecture(secret, lec, len(codes), str(exp_ts)):
+        print("ההפקה דווחה לדשבורד")
 
 
 if __name__ == "__main__":

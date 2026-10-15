@@ -1,9 +1,15 @@
 /**
  * Cloudflare Worker — אימות קודי נוכחות ורישום ב-Firestore.
  *
- * נקודות גישה (POST, גוף JSON עם id, lec, exp, sig):
+ * נקודות גישה לסטודנטים (POST, גוף JSON עם id, lec, exp, sig):
  *   /names  — מחזיר את רשימת הסטודנטים, רק עבור קוד תקף שעוד לא נוצל
  *   /       — רושם נוכחות (בנוסף צריך name)
+ *
+ * נקודות גישה למרצה:
+ *   GET  /dashboard   — דף הדשבורד (בלי נתונים; הנתונים נטענים אחרי כניסה)
+ *   GET  /admin/data  — נתוני נוכחות והרצאות. דורש Authorization: Bearer <ADMIN_TOKEN>.
+ *                       ?since=<ISO> מחזיר רק מה שהשתנה מאז (חוסך קריאות ב-Firestore)
+ *   POST /lectures    — generate.py מדווח על הפקת קודים. חתום ב-HMAC_SECRET.
  *
  * רשימת הסטודנטים (students.json) נארזת לתוך ה-Worker בזמן הפריסה.
  * היא לא נמצאת ב-GitHub ולא חשופה לציבור.
@@ -11,11 +17,13 @@
  * Secrets (wrangler secret put):
  *   HMAC_SECRET               — המפתח הסודי (אותה מחרוזת בדיוק שב-secret.key אצל המרצה)
  *   FIREBASE_SERVICE_ACCOUNT  — תוכן קובץ ה-JSON של ה-service account
+ *   ADMIN_TOKEN               — סיסמת הכניסה לדשבורד
  * Vars (wrangler.toml):
  *   ALLOWED_ORIGIN            — כתובת אתר ה-GitHub Pages, למשל https://user.github.io
  */
 
 import students from "../../students.json" with { type: "json" };
+import dashboardHtml from "./dashboard.html";
 
 const STUDENT_LIST = students.map((s) => s.normalize("NFC").trim());
 const STUDENTS = new Set(STUDENT_LIST);
@@ -29,6 +37,38 @@ const enc = new TextEncoder();
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+    const route = url.pathname.replace(/\/+$/, "");
+
+    // ---- נקודות הגישה של המרצה ----
+    if (route === "/dashboard" && request.method === "GET") {
+      return new Response(dashboardHtml, {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "Content-Security-Policy":
+            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+          "X-Robots-Tag": "noindex",
+          "Referrer-Policy": "no-referrer",
+        },
+      });
+    }
+    if (route === "/admin/data" && request.method === "GET") {
+      if (!(await isAdmin(request, env))) {
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+      try {
+        return json(await adminData(env, url.searchParams.get("since")), 200);
+      } catch (err) {
+        console.error("admin data error:", err?.message ?? err);
+        return json({ ok: false, error: "server" }, 500);
+      }
+    }
+    if (route === "/lectures" && request.method === "POST") {
+      return reportLecture(request, env);
+    }
+
+    // ---- נקודות הגישה של הסטודנטים ----
     const cors = corsHeaders(request, env);
 
     if (request.method === "OPTIONS") {
@@ -56,10 +96,8 @@ export default {
       return json({ ok: false, error: codeError.error }, codeError.status, cors);
     }
 
-    const path = new URL(request.url).pathname.replace(/\/+$/, "");
-
     // רשימת השמות — רק למי שמחזיק קוד תקף שעוד לא נוצל
-    if (path === "/names") {
+    if (route === "/names") {
       try {
         if (await isUsed(env, id)) {
           return json({ ok: false, error: "used" }, 409, cors);
@@ -70,7 +108,7 @@ export default {
       }
       return json({ ok: true, names: STUDENT_LIST }, 200, cors);
     }
-    if (path !== "") {
+    if (route !== "") {
       return json({ ok: false, error: "not_found" }, 404, cors);
     }
 
@@ -268,6 +306,169 @@ async function getAccessToken(sa) {
   const data = await res.json();
   cachedToken = { token: data.access_token, exp: now + (data.expires_in || 3600) };
   return cachedToken.token;
+}
+
+// ---------- מרצה: דשבורד ודיווח הפקה ----------
+
+// השוואת הסיסמה ב-constant time: משווים hash של שני הצדדים
+async function isAdmin(request, env) {
+  const expected = (env.ADMIN_TOKEN || "").trim();
+  const given = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!expected || !given) return false;
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(given)),
+    crypto.subtle.digest("SHA-256", enc.encode(expected)),
+  ]);
+  const x = new Uint8Array(a), y = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
+async function runQuery(sa, token, collectionId, field, since) {
+  const structuredQuery = {
+    from: [{ collectionId }],
+    orderBy: [{ field: { fieldPath: field }, direction: "ASCENDING" }],
+  };
+  if (since) {
+    structuredQuery.where = {
+      fieldFilter: {
+        field: { fieldPath: field },
+        op: "GREATER_THAN_OR_EQUAL",
+        value: { timestampValue: since },
+      },
+    };
+  }
+  const res = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents:runQuery`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ structuredQuery }),
+    },
+  );
+  if (!res.ok) throw new Error(`runQuery ${collectionId} failed: ${res.status} ${await res.text()}`);
+  const rows = await res.json();
+  return rows.filter((r) => r.document).map((r) => r.document);
+}
+
+const str = (f) => f?.stringValue ?? null;
+const ts = (f) => f?.timestampValue ?? null;
+const int = (f) => (f?.integerValue != null ? Number(f.integerValue) : 0);
+
+async function adminData(env, sinceParam) {
+  let since = null;
+  if (sinceParam) {
+    const d = new Date(sinceParam);
+    if (!isNaN(d)) since = d.toISOString();
+  }
+  const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+  const token = await getAccessToken(sa);
+  const serverTime = new Date().toISOString();
+  const [att, lecs] = await Promise.all([
+    runQuery(sa, token, "attendance", "timestamp", since),
+    runQuery(sa, token, "lectures", "updatedAt", since),
+  ]);
+  return {
+    ok: true,
+    serverTime,
+    full: !since,
+    students: STUDENT_LIST,
+    attendance: att.map((d) => ({
+      id: d.name.split("/").pop(),
+      lec: str(d.fields.lec),
+      name: str(d.fields.name),
+      timestamp: ts(d.fields.timestamp),
+    })),
+    lectures: lecs.map((d) => ({
+      lec: str(d.fields.lec),
+      codesGenerated: int(d.fields.codesGenerated),
+      lastGeneratedAt: ts(d.fields.lastGeneratedAt),
+      expiresAt: ts(d.fields.expiresAt),
+    })),
+  };
+}
+
+// generate.py מדווח: {lec, count, exp, batch, ts, sig}
+// sig = HMAC(secret, "lecture|lec|count|exp|batch|ts"). batch אקראי — דיווח חוזר לא נספר פעמיים.
+async function reportLecture(request, env) {
+  let b;
+  try {
+    const text = await request.text();
+    if (text.length > 2048) throw new Error("too large");
+    b = JSON.parse(text);
+  } catch {
+    return json({ ok: false, error: "bad_request" }, 400);
+  }
+  const count = Number(b?.count);
+  if (
+    typeof b?.lec !== "string" || !LEC_RE.test(b.lec) ||
+    !Number.isInteger(count) || count < 1 || count > 1000 ||
+    typeof b?.exp !== "string" || !EXP_RE.test(b.exp) ||
+    typeof b?.batch !== "string" || !ID_RE.test(b.batch) ||
+    typeof b?.ts !== "string" || !EXP_RE.test(b.ts) ||
+    typeof b?.sig !== "string" || !SIG_RE.test(b.sig)
+  ) {
+    return json({ ok: false, error: "invalid" }, 400);
+  }
+  const msg = `lecture|${b.lec}|${count}|${b.exp}|${b.batch}|${b.ts}`;
+  if (!(await verifySignature(env.HMAC_SECRET, msg, b.sig))) {
+    return json({ ok: false, error: "invalid" }, 403);
+  }
+  if (Math.abs(Date.now() / 1000 - Number(b.ts)) > 600) {
+    return json({ ok: false, error: "stale" }, 400);
+  }
+
+  try {
+    const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+    const token = await getAccessToken(sa);
+    const base = `projects/${sa.project_id}/databases/(default)/documents`;
+    const now = new Date().toISOString();
+    const expIso = new Date(Number(b.exp) * 1000).toISOString();
+    const res = await fetch(`https://firestore.googleapis.com/v1/${base}:commit`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        writes: [
+          {
+            update: {
+              name: `${base}/lectures/${b.lec}/batches/${b.batch}`,
+              fields: {
+                count: { integerValue: String(count) },
+                expiresAt: { timestampValue: expIso },
+                createdAt: { timestampValue: now },
+              },
+            },
+            currentDocument: { exists: false },
+          },
+          {
+            update: {
+              name: `${base}/lectures/${b.lec}`,
+              fields: {
+                lec: { stringValue: b.lec },
+                lastGeneratedAt: { timestampValue: now },
+                expiresAt: { timestampValue: expIso },
+                updatedAt: { timestampValue: now },
+              },
+            },
+            updateMask: { fieldPaths: ["lec", "lastGeneratedAt", "expiresAt", "updatedAt"] },
+            updateTransforms: [
+              { fieldPath: "codesGenerated", increment: { integerValue: String(count) } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (res.ok) return json({ ok: true }, 200);
+    const err = await res.json().catch(() => ({}));
+    const status = err?.error?.status;
+    // אותו batch כבר דווח — לא סופרים שוב
+    if (status === "ALREADY_EXISTS" || status === "FAILED_PRECONDITION") return json({ ok: true, duplicate: true }, 200);
+    throw new Error(`commit failed: ${res.status} ${JSON.stringify(err)}`);
+  } catch (err) {
+    console.error("lecture report error:", err?.message ?? err);
+    return json({ ok: false, error: "server" }, 500);
+  }
 }
 
 // ---------- helpers ----------
